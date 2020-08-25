@@ -32,7 +32,7 @@ ggplot(data = train, aes(revenue)) +
 ```{r}
 test$revenue <- NA
 
-# Removing outliersh
+# Removing outliers
 train <- train[train$revenue < 16000000,]
 
 # Combining the train and test set
@@ -126,7 +126,7 @@ xgb.model
 
 ```{r}
 submission3 <- data.frame(test.Id, Prediction = predict(xgb.model, test))
-write.csv(submission2, "caret-xgbTree.csv", row.names = FALSE)
+write.csv(submission3, "caret-xgbTree.csv", row.names = FALSE)
 ```
 
 
