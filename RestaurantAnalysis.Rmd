@@ -1,0 +1,133 @@
+---
+title: "RestaurantAnalysis"
+output: html_document
+---
+
+```{r setup, message = FALSE}
+# Loading necessary packages
+library(randomForest)
+library(dplyr)
+library(ggplot2)
+library(caret)
+```
+
+```{r}
+# Reading in the data
+test <- read.csv(unzip("test.csv.zip"))
+train <- read.csv(unzip("train.csv.zip"))
+```
+
+```{r}
+# Pulling the Ids from the test data for the submission file
+test.Id <- test %>% select(Id)
+```
+
+```{r}
+# Histogram of restaurant revenue
+ggplot(data = train, aes(revenue)) + 
+  geom_histogram(binwidth = 1000000) + 
+  scale_x_continuous(name = "Revenue", labels = scales::comma)
+```
+
+```{r}
+test$revenue <- NA
+
+# Removing outliersh
+train <- train[train$revenue < 16000000,]
+
+# Combining the train and test set
+combined <- rbind(train, test)
+
+# Creating a date-type variable from the Open.Date variable
+combined$date <- as.Date(strptime(combined$Open.Date, "%m/%d/%Y"))
+
+# Pulling the day from the date variable
+combined$day <- as.numeric(format(combined$date, format = "%d"))
+
+# Pulling the day from the date variable
+combined$month <- as.factor(format(combined$date, format = "%m"))
+
+# Pulling the day from the date variable
+combined$year <- as.factor(format(combined$date, format = "%Y"))
+
+# Creating a days variable to represent the total number of days the restaurant has been open
+combined$days <- as.numeric(as.Date("2020-08-13") - combined$date)
+```
+
+```{r}
+train <- combined %>% filter(!is.na(revenue)) %>% select(-c(Id, City, Open.Date, date))
+test <- combined %>% filter(is.na(revenue)) %>% select(-c(Id, City, Open.Date, date, revenue))
+```
+
+```{r}
+set.seed(1217) 
+fit <- randomForest(train$revenue ~ ., data = train)
+```
+
+```{r}
+submission <- data.frame(test.Id, Prediction = predict(fit, test))
+write.csv(submission, "rf.csv", row.names = FALSE)
+# Private Score: 1741357.23020 => 5th out of 2257 ~ 100th %tile 
+# Public Score: 1610929.73699 => 53rd out of 2257 ~ 98th %tile
+```
+
+```{r}
+test[test$Type == 'MB',]$Type <- 'DT'
+```
+
+```{r}
+# Trying with caret now
+myControl <- trainControl(method = "cv", 
+                          number = 10
+                          )
+
+tunegrid <- expand.grid(mtry = c(10, 15, 20))
+
+set.seed(1217)
+
+rf.model <- train(revenue ~ ., 
+                  data = train,
+                  method = 'rf',
+                  trControl = myControl, 
+                  tuneGrid = tunegrid,
+                  maximize = FALSE
+                  ) 
+
+rf.model
+```
+
+```{r}
+submission2 <- data.frame(test.Id, Prediction = predict(rf.model, test))
+write.csv(submission2, "caret-rf.csv", row.names = FALSE)
+```
+
+```{r}
+set.seed(1217)
+
+tunegrid <- expand.grid(nrounds = c(15, 20, 25),
+                        max_depth = 1,
+                        eta = .1875,
+                        gamma = 0,
+                        colsample_bytree = c(.65, .675),
+                        min_child_weight = 2,
+                        subsample = 1
+                        )
+
+xgb.model <- train(revenue ~ ., 
+                   data = train,
+                   method = 'xgbTree',
+                   trControl = myControl, 
+                   tuneGrid = tunegrid,
+                   maximize = FALSE
+                   ) 
+
+xgb.model
+```
+
+```{r}
+submission3 <- data.frame(test.Id, Prediction = predict(xgb.model, test))
+write.csv(submission2, "caret-xgbTree.csv", row.names = FALSE)
+```
+
+
+
